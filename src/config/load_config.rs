@@ -4,15 +4,13 @@ use std::io::{Error, ErrorKind, Read, Result};
 
 use crate::config::Config;
 
-static DEFAULT_CONF_PATH: &str = "./aliyun-ddns";
-
-/// parse args and load server configuration
+/// 解析参数并读取配置文件
 ///
 /// # Return
 ///     Result<(String, Config)>: (config_path, Config)
 pub fn load_server_config() -> Result<(String, Config)> {
     // configuration file path
-    let mut config_path: String = String::from(DEFAULT_CONF_PATH);
+    let mut config_path: String = String::from("");
 
     let args: Vec<String> = env::args().collect();
     let mut it = args.iter();
@@ -38,7 +36,10 @@ pub fn load_server_config() -> Result<(String, Config)> {
                     }
                     Some(config_file_path_arg) => {
                         config_path = config_file_path_arg.clone();
-                        config = parse_and_read_config_file(config_file_path_arg)?;
+                        config = parse_and_read_config_file(&format!(
+                            "{}/config.toml",
+                            config_file_path_arg
+                        ))?;
                         println!(
                             "ConfigLoad: [Warning] Using config file. CLI args will be ignored."
                         );
