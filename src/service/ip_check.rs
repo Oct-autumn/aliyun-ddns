@@ -58,7 +58,7 @@ impl IpCheckService {
                 // IP changed, check if need to update
                 if !need_recheck {
                     // update IP
-                    info!("IP updated to:\n\tipv4: {}\t\nipv6: {}", ip.0, ip.1);
+                    info!("IP updated to:\n\tipv4: {}\n\tipv6: {}", ip.0, ip.1);
                     record.last_ip = ip.clone();
                     record.last_update = record.last_check;
                     self.recorder.update_record(record.clone());

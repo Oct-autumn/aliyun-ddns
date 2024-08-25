@@ -156,5 +156,5 @@ fn default_recheck() -> bool {
     false
 }
 fn default_recheck_interval() -> u64 {
-    1
+    5
 }
