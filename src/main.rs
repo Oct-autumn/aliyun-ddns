@@ -2,9 +2,9 @@ use std::env;
 
 use config::{load_config::load_server_config, record::Recorder, Config};
 use lazy_static::lazy_static;
-use service::ip_check::{self, IpCheckService, IpType};
-use tokio::{runtime::Runtime, select};
-use tracing::{error, info, trace, warn, Instrument};
+use service::ip_check::IpCheckService;
+use tokio::select;
+use tracing::{info, trace, warn, Instrument};
 use util::log_collector::log_collector_init;
 
 mod config;
@@ -36,7 +36,7 @@ fn main() {
         }
     };
 
-    let runtime = tokio::runtime::Builder::new_multi_thread()
+    let runtime = tokio::runtime::Builder::new_current_thread()
         .worker_threads(2)
         .enable_all()
         .build()
@@ -44,9 +44,6 @@ fn main() {
 
     // 获取当前时间，输出启动日志
     info!("Dynamic DNS Service started");
-
-    //let ipv4 = ip_check::get_ip(ip_check::IpType::V6).await;
-    //println!("{:?}", ipv4.unwrap());
 
     // 用于关闭服务的信号
     let (server_shutdown_sender, _server_shutdown_receiver) =
@@ -61,13 +58,7 @@ fn main() {
         let _guard_sender = _guard_sender.clone();
         service_handle = runtime.spawn(
             async move {
-                let ip_type = match GLOBAL_CONFIG.1.ip_type.as_str() {
-                    "ipv4" => IpType::V4,
-                    "ipv6" => IpType::V6,
-                    _ => unreachable!(),
-                };
                 let mut ip_check_service = IpCheckService::new(
-                    ip_type,
                     GLOBAL_CONFIG.1.check.check_interval,
                     GLOBAL_CONFIG.1.check.enable_recheck,
                     GLOBAL_CONFIG.1.check.recheck_interval,

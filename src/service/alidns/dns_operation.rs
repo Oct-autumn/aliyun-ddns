@@ -4,8 +4,6 @@
 use std::{
     collections::HashMap,
     io::{Error, ErrorKind, Result},
-    ops::Deref,
-    result,
 };
 
 use reqwest::{
@@ -15,17 +13,12 @@ use reqwest::{
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
-use crate::{util::random_signature_nonce, GLOBAL_CONFIG};
+use crate::{config::DNSRecord, util::random_signature_nonce, GLOBAL_CONFIG};
 
 use super::request_auth::{generate_authorization_header, generate_hashed_request_payload};
 
 static HOST: &str = "alidns.cn-shanghai.aliyuncs.com";
 static API_VERSION: &str = "2015-01-09";
-
-enum RecordType {
-    A,
-    AAAA,
-}
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct DnsRecordList {
@@ -102,13 +95,9 @@ impl AliyunDnsOperate {
         }
     }
 
-    pub async fn update_dns_record(&self, new_ip: &String) -> Result<()> {
-        let record_type = match GLOBAL_CONFIG.1.ip_type.as_str() {
-            "ipv4" => "A",
-            "ipv6" => "AAAA",
-            _ => unreachable!("Invalid IP type"),
-        };
-        let hostname = &GLOBAL_CONFIG.1.hostname;
+    pub async fn update_dns_record(&self, new_ip: &String, dns_record: &DNSRecord) -> Result<()> {
+        let record_type = dns_record.record_type.as_str();
+        let hostname = &dns_record.hostname;
         let list = self.get_dns_record_list(hostname).await?;
 
         // 获取目标解析记录的ID
@@ -150,7 +139,7 @@ impl AliyunDnsOperate {
 
         // 生成请求并发送
         let result = self
-            .generate_authed_request(method, action, &query, &headers, None)
+            .generate_authed_request(method, &query, &headers, None)
             .send()
             .await;
 
@@ -185,7 +174,7 @@ impl AliyunDnsOperate {
 
         // 生成请求并发送
         let result = self
-            .generate_authed_request(method, action, &query, &headers, None)
+            .generate_authed_request(method, &query, &headers, None)
             .send()
             .await;
 
@@ -235,7 +224,6 @@ impl AliyunDnsOperate {
     fn generate_authed_request(
         &self,
         method: &str,
-        action: &str,
         query: &HashMap<&str, String>,
         headers: &HeaderMap,
         payload: Option<&String>,

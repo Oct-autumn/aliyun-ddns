@@ -9,7 +9,7 @@ static DEFAULT_LOG_LEVEL: &str = "info";
 /// 记录上次的运行信息（单独存储于特定文件中）
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Record {
-    pub last_ip: String,
+    pub last_ip: (String, String),
     pub last_check: i64,
     pub last_update: i64,
 }
@@ -17,7 +17,7 @@ pub struct Record {
 impl Record {
     fn new() -> Record {
         Record {
-            last_ip: String::new(),
+            last_ip: (String::new(), String::new()),
             last_check: 0,
             last_update: 0,
         }
@@ -27,15 +27,22 @@ impl Record {
 /// 配置信息
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Config {
-    #[serde(default = "default_ip_type", rename = "ip-type")]
-    pub ip_type: String,
     #[serde(default = "empty_string", rename = "domain-name")]
     pub domain_name: String,
-    #[serde(default = "empty_string")]
-    pub hostname: String,
+    #[serde(rename = "record")]
+    pub dns_records: Vec<DNSRecord>,
     pub auth: Auth,
     pub log: Log,
     pub check: Check,
+}
+
+/// 关联的解析记录
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct DNSRecord {
+    #[serde(default = "empty_string", rename = "record-type")]
+    pub record_type: String,
+    #[serde(default = "empty_string")]
+    pub hostname: String,
 }
 
 /// Authentication Info
@@ -82,12 +89,20 @@ pub struct Check {
 impl Config {
     fn new() -> Config {
         Config {
-            ip_type: default_ip_type(),
             domain_name: empty_string(),
-            hostname: empty_string(),
+            dns_records: Vec::new(),
             auth: Auth::new(),
             log: Log::new(),
             check: Check::new(),
+        }
+    }
+}
+
+impl DNSRecord {
+    fn new() -> DNSRecord {
+        DNSRecord {
+            record_type: empty_string(),
+            hostname: empty_string(),
         }
     }
 }
@@ -120,10 +135,6 @@ impl Check {
             recheck_interval: default_recheck_interval(),
         }
     }
-}
-
-fn default_ip_type() -> String {
-    String::from("ipv4")
 }
 
 fn empty_string() -> String {
