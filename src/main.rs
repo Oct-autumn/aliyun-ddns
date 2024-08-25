@@ -1,4 +1,4 @@
-use std::env;
+use std::{env, io::Error};
 
 use config::{load_config::load_server_config, record::Recorder, Config};
 use lazy_static::lazy_static;
@@ -11,9 +11,14 @@ mod config;
 mod service;
 mod util;
 
+fn exit_on_error(e: Error) -> (String, Config) {
+    println!("{}", e);
+    std::process::exit(1);
+}
+
 lazy_static! {
     /// 全局配置
-    pub static ref GLOBAL_CONFIG: (String, Config) = load_server_config().unwrap();
+    pub static ref GLOBAL_CONFIG: (String, Config) = load_server_config().unwrap_or_else(exit_on_error);
 }
 
 fn main() {

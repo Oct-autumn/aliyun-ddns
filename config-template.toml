@@ -1,0 +1,43 @@
+# 域名，必填项
+domain-name = "example.com"
+
+# 至少配置一条DNS记录
+# 包含以下字段：
+#   - record-type: 必填项，DNS解析记录的类型，可选值为`A`或`AAAA`
+#   - hostname: 必填项，DNS解析记录主机名
+[[record]]
+record-type = "AAAA"
+hostname = "www"
+
+[[record]]
+record-type = "A"
+hostname = "www"
+
+
+[auth]
+# 阿里云认证ID，必填项
+auth-id = ""
+# 阿里云认证Token，必填项
+auth-token = ""
+
+[log]
+# 是否启用日志文件，该项默认关闭，启用后会将日志记录到磁盘中
+#log-to-file = false
+# 日志路径，默认为程序当前工作目录，推荐指定为`/var/log/aliyun-ddns`
+#log-path = "./log"
+
+# 日志记录参数 (error > warn > info > debug > trace)
+# 注意！过于详细的日志记录可能影响性能
+# 文件日志等级，可选，默认为info
+#record-directive = "info"
+# 控制台日志等级，可选，默认为info
+#console-directive = "info"
+
+[check]
+# ip变化检查间隔（单位：秒），默认为43200（即12小时），不能设置为0
+#check-interval = 43200
+# 重新检查的时间间隔（单位：秒），默认为5（即5秒），不能设置为0
+# 重新检查可能发生在：1. 获取IP发生异常；2. 更改DNS记录发生异常
+#recheck-interval = 5
+# ip发生变化后，更改DNS记录前是否进行重复检查，默认为false（即立即更改，不重复检查）
+#enable-recheck = false

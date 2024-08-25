@@ -31,7 +31,7 @@ pub fn load_server_config() -> Result<(String, Config)> {
                         //return错误
                         Err(Error::new(
                             ErrorKind::NotFound,
-                            "Please enter the path of server server_config.",
+                            "Please enter the path of service config.",
                         ))
                     }
                     Some(config_file_path_arg) => {
@@ -44,20 +44,54 @@ pub fn load_server_config() -> Result<(String, Config)> {
                             "ConfigLoad: [Warning] Using config file. CLI args will be ignored."
                         );
 
-                        check_config(&config);
-
-                        Ok((config_path, config))
+                        match check_config(&config) {
+                            Err(e) => Err(Error::new(
+                                ErrorKind::InvalidData,
+                                format!(
+                                    "An Error occurred when checking config file.\n\tDetails: {}",
+                                    e
+                                ),
+                            )),
+                            Ok(_) => Ok((config_path, config)),
+                        }
                     }
                 };
             }
             "-t" | "--test" => {
-                // TODO: 测试配置文件
+                // 测试配置文件
+                arg = it.next();
+                return match arg {
+                    None => {
+                        //return错误
+                        Err(Error::new(
+                            ErrorKind::NotFound,
+                            "Please enter the path of service config.",
+                        ))
+                    }
+                    Some(config_file_path_arg) => {
+                        config = parse_and_read_config_file(config_file_path_arg)?;
+
+                        match check_config(&config) {
+                            Err(e) => Err(Error::new(
+                                ErrorKind::InvalidData,
+                                format!(
+                                    "An Error occurred when checking config file.\n\tDetails: {}",
+                                    e
+                                ),
+                            )),
+                            Ok(_) => {
+                                println!("ConfigLoad: [Info] Config file is valid.");
+                                std::process::exit(0);
+                            }
+                        }
+                    }
+                };
             }
             "-h" | "--help" => {
                 //显示帮助信息
                 println!("Help: ");
                 println!("\t-c | --config PATH  > Path to the configuration file");
-                println!("\t-t | --test         > Test the configuration file");
+                println!("\t-t | --test PATH    > Test the configuration file");
                 println!("\t-h | --help         > Show help message");
                 return Err(Error::new(ErrorKind::Other, "Help message displayed."));
             }
@@ -82,7 +116,7 @@ fn parse_and_read_config_file(config_file_path_arg: &String) -> Result<Config> {
             return Err(Error::new(
                 ErrorKind::Other,
                 format!(
-                    "An Error occurred when parsing config file.\n\tDetails:{}",
+                    "An Error occurred when parsing config file.\n\tDetails: {}",
                     e.message()
                 ),
             ));
@@ -94,4 +128,59 @@ fn parse_and_read_config_file(config_file_path_arg: &String) -> Result<Config> {
 }
 
 /// 检查配置文件是否符合要求
-fn check_config(_config: &Config) {}
+fn check_config(config: &Config) -> Result<()> {
+    // 检查是否配置了主域名，是否合法
+    if config.domain_name.is_empty() {
+        return Err(Error::new(ErrorKind::InvalidData, "Domain name is empty."));
+    }
+
+    // 检查是否至少配置了一个子域名
+    if config.dns_records.is_empty() {
+        return Err(Error::new(ErrorKind::InvalidData, "Sub domain is empty."));
+    }
+    // 检查各子域名的配置是否合法
+    for record in &config.dns_records {
+        // 检查子域名记录类型
+        if record.record_type != "A" && record.record_type != "AAAA" {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                "Record type is invalid.",
+            ));
+        }
+        // 检查子域名记录值
+        if record.hostname.is_empty() {
+            return Err(Error::new(ErrorKind::InvalidData, "Hostname is empty."));
+        }
+    }
+
+    // 检查是否配置了认证ID和Token
+    if config.auth.auth_id.is_empty() || config.auth.auth_token.is_empty() {
+        return Err(Error::new(
+            ErrorKind::InvalidData,
+            "Authentication ID or Token is empty.",
+        ));
+    }
+
+    // 检查日志记录配置是否合法
+    if config.log.log_to_file {
+        if config.log.log_path.is_empty() {
+            return Err(Error::new(ErrorKind::InvalidData, "Log path is empty."));
+        }
+    }
+
+    // 检查IP检查服务配置是否合法
+    if config.check.check_interval == 0 {
+        return Err(Error::new(
+            ErrorKind::InvalidData,
+            "Check interval is invalid.",
+        ));
+    }
+    if config.check.recheck_interval == 0 {
+        return Err(Error::new(
+            ErrorKind::InvalidData,
+            "Recheck interval is invalid.",
+        ));
+    }
+
+    Ok(())
+}
