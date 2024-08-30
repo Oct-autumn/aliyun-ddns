@@ -1,3 +1,7 @@
+v0.3.0
+    - Feature: support for getting IP address from NIC
+    - Feature: support for specifying the method of getting IP address
+
 v0.2.2
     - Feature: support for testing the configuration file
     - Add: template configuration file

@@ -13,7 +13,7 @@ use reqwest::{
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
-use crate::{config::DNSRecord, util::random_signature_nonce, GLOBAL_CONFIG};
+use crate::{util::random_signature_nonce, GLOBAL_CONFIG};
 
 use super::request_auth::{generate_authorization_header, generate_hashed_request_payload};
 
@@ -95,16 +95,19 @@ impl AliyunDnsOperate {
         }
     }
 
-    pub async fn update_dns_record(&self, new_ip: &String, dns_record: &DNSRecord) -> Result<()> {
-        let record_type = dns_record.record_type.as_str();
-        let hostname = &dns_record.hostname;
+    pub async fn update_dns_record(
+        &self,
+        new_ip: &String,
+        record_type: &String,
+        hostname: &String,
+    ) -> Result<()> {
         let list = self.get_dns_record_list(hostname).await?;
 
         // 获取目标解析记录的ID
         let record_id: String = {
             let mut ret = None;
             for record in list.domain_records.record {
-                if record.rr == *hostname && record.record_type == record_type {
+                if record.rr == *hostname && record.record_type == *record_type {
                     ret = Some(record.record_id);
                     break;
                 }

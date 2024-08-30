@@ -21,9 +21,9 @@ lazy_static! {
     pub static ref GLOBAL_CONFIG: (String, Config) = load_server_config().unwrap_or_else(exit_on_error);
 }
 
-fn main() {
-    println!("{:?}", env::args().collect::<Vec<String>>());
+pub static VERSION: &str = env!("CARGO_PKG_VERSION");
 
+fn main() {
     let recorder = Recorder::new(GLOBAL_CONFIG.0.clone());
 
     // 启动并测试日志记录
@@ -48,7 +48,7 @@ fn main() {
         .unwrap();
 
     // 获取当前时间，输出启动日志
-    info!("Dynamic DNS Service started");
+    info!("Dynamic DNS Service started. Service version: v{}", VERSION);
 
     // 用于关闭服务的信号
     let (server_shutdown_sender, _server_shutdown_receiver) =

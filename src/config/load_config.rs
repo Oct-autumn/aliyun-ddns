@@ -87,11 +87,21 @@ pub fn load_server_config() -> Result<(String, Config)> {
                     }
                 };
             }
+            "-v" | "--version" => {
+                //显示版本信息
+                println!("AliyunDDNS Service - OctAutumn");
+                println!("Version: {}", env!("CARGO_PKG_VERSION"));
+                return Err(Error::new(
+                    ErrorKind::Other,
+                    "Version information displayed.",
+                ));
+            }
             "-h" | "--help" => {
                 //显示帮助信息
                 println!("Help: ");
                 println!("\t-c | --config PATH  > Path to the configuration file");
                 println!("\t-t | --test PATH    > Test the configuration file");
+                println!("\t-v | --version      > Show version information");
                 println!("\t-h | --help         > Show help message");
                 return Err(Error::new(ErrorKind::Other, "Help message displayed."));
             }
@@ -135,11 +145,11 @@ fn check_config(config: &Config) -> Result<()> {
     }
 
     // 检查是否至少配置了一个子域名
-    if config.dns_records.is_empty() {
+    if config.records.is_empty() {
         return Err(Error::new(ErrorKind::InvalidData, "Sub domain is empty."));
     }
     // 检查各子域名的配置是否合法
-    for record in &config.dns_records {
+    for record in &config.records {
         // 检查子域名记录类型
         if record.record_type != "A" && record.record_type != "AAAA" {
             return Err(Error::new(
@@ -150,6 +160,10 @@ fn check_config(config: &Config) -> Result<()> {
         // 检查子域名记录值
         if record.hostname.is_empty() {
             return Err(Error::new(ErrorKind::InvalidData, "Hostname is empty."));
+        }
+        // 检查是否指定了网卡
+        if record.nic_name.is_some() && record.nic_name.as_ref().unwrap().is_empty() {
+            return Err(Error::new(ErrorKind::InvalidData, "NIC name is empty."));
         }
     }
 

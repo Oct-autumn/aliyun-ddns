@@ -5,9 +5,13 @@ domain-name = "example.com"
 # 包含以下字段：
 #   - record-type: 必填项，DNS解析记录的类型，可选值为`A`或`AAAA`
 #   - hostname: 必填项，DNS解析记录主机名
+#   - nic-name: 可选项，指定网卡名称，用于获取指定网卡的IP地址（若指定该条，将不会使用通过UDP Socket获取的IP地址）
+#   - use-temporary-addr: 仅当指定nic-name时有效，指定是否使用临时IPv6地址，可选值为`true`或`false`，默认为`true`
 [[record]]
 record-type = "AAAA"
 hostname = "www"
+nic-name = "eth2"
+use-temporary-addr = true
 
 [[record]]
 record-type = "A"

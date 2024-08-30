@@ -1,7 +1,12 @@
-use tokio::net::UdpSocket;
+use std::collections::HashMap;
+
 use tracing::{info, trace, warn};
 
-use crate::{config::record::Recorder, GLOBAL_CONFIG};
+use crate::{
+    config::{record::Recorder, IP},
+    service::get_ip::{get_ip_via_nic, get_ip_via_socket},
+    GLOBAL_CONFIG,
+};
 
 use super::alidns::dns_operation::AliyunDnsOperate;
 
@@ -30,61 +35,97 @@ impl IpCheckService {
     }
 
     pub async fn start(&mut self, mut shutdown_receiver: tokio::sync::broadcast::Receiver<()>) {
-        // 初始化
+        // Initialization
         let mut need_recheck = self.enable_recheck;
         let mut record = self.recorder.get_record();
+        let mut dns_records: HashMap<String, Vec<(String, String, bool)>> = HashMap::new();
+
+        // Collect DNS records
+        for dns_record in GLOBAL_CONFIG.1.records.iter() {
+            dns_records
+                .entry(dns_record.nic_name.clone().unwrap_or("".to_string()))
+                .or_insert(Vec::new())
+                .push((
+                    dns_record.record_type.clone(),
+                    dns_record.hostname.clone(),
+                    dns_record.use_temporary_addr,
+                ));
+        }
+
         loop {
             // Check IP
-            let ip = Self::get_ip().await;
+            let mut ip_map: HashMap<String, IP>;
+            {
+                let ip_via_socket = get_ip_via_socket().await;
+                let ip_via_nic = get_ip_via_nic();
 
-            if ip.is_none() {
-                warn!(
-                    "Failed to get IP address, retry in {} seconds",
-                    self.recheck_interval
-                );
-                tokio::time::sleep(tokio::time::Duration::from_secs(self.recheck_interval)).await;
-                continue;
+                if ip_via_socket.is_none() || ip_via_nic.is_empty() {
+                    warn!(
+                        "Something wrong happened when getting IPs, retry in {} seconds",
+                        self.recheck_interval
+                    );
+                    tokio::time::sleep(tokio::time::Duration::from_secs(self.recheck_interval))
+                        .await;
+                    continue;
+                }
+
+                // collect IPs
+                ip_map = ip_via_nic
+                    .iter()
+                    .map(|(name, ip)| (name.clone(), ip.clone()))
+                    .collect();
+                ip_map.insert("".to_string(), ip_via_socket.unwrap());
             }
-            let ip = ip.unwrap();
 
-            // record check time and IP
+            // record check time
             record.last_check = chrono::Utc::now().timestamp();
             self.recorder.update_record(record.clone());
 
             // check if IP changed
-            if ip.0.eq(&record.last_ip.0) && ip.1.eq(&record.last_ip.1) {
+            let changed_list = self.check_if_changed(&ip_map);
+            if changed_list.is_empty() {
                 trace!("IP not changed");
             } else {
                 // IP changed, check if need to update
                 if !need_recheck {
                     // update IP
-                    info!("IP updated to:\n\tipv4: {}\n\tipv6: {}", ip.0, ip.1);
-                    record.last_ip = ip.clone();
+                    info!("IP changed, updating DNS records");
+
+                    record.last_ip = ip_map.clone();
                     record.last_update = record.last_check;
                     self.recorder.update_record(record.clone());
 
                     // update DNS records
-                    for dns_record in GLOBAL_CONFIG.1.dns_records.iter() {
-                        if dns_record.record_type.eq("A") {
-                            self.dns_operate
-                                .update_dns_record(&ip.0, dns_record)
-                                .await
-                                .unwrap();
-                            info!(
-                                "Updated A record for {}.{} to {}",
-                                dns_record.hostname, GLOBAL_CONFIG.1.domain_name, ip.0
-                            );
-                        } else if dns_record.record_type.eq("AAAA") {
-                            self.dns_operate
-                                .update_dns_record(&ip.1, dns_record)
-                                .await
-                                .unwrap();
-                            info!(
-                                "Updated AAAA record for {}.{} to {}",
-                                dns_record.hostname, GLOBAL_CONFIG.1.domain_name, ip.1
-                            );
+                    for nic_name in changed_list {
+                        let ips = ip_map.get(&nic_name).unwrap();
+
+                        for dns_record in dns_records.get(&nic_name).unwrap() {
+                            let (record_type, hostname, use_temporary_addr) = dns_record;
+                            let ip = if record_type == "A" {
+                                ips.v4.clone()
+                            } else if *use_temporary_addr {
+                                ips.v6_temp.clone()
+                            } else {
+                                ips.v6.clone()
+                            };
+
+                            if ip.is_none() {
+                                warn!("No IP address found for {}", hostname);
+                                continue;
+                            }
+
+                            let ip = ip.unwrap().ip().to_string();
+                            let result = self
+                                .dns_operate
+                                .update_dns_record(hostname, record_type, &ip)
+                                .await;
+
+                            if result.is_err() {
+                                warn!("Failed to update DNS record for {}", hostname);
+                            }
                         }
                     }
+
                     info!("All DNS records updated successfully");
                     need_recheck = self.enable_recheck;
                 } else {
@@ -106,38 +147,22 @@ impl IpCheckService {
         drop(shutdown_receiver);
     }
 
-    /// Get IP address
-    async fn get_ip() -> Option<(String, String)> {
-        let bind_addr = ("0.0.0.0:0", "[::]:0");
-        let connect_addr = ("8.8.8.8:80", "[2001:4860:4860::8888]:80");
+    fn check_if_changed(&self, ip: &HashMap<String, IP>) -> Vec<String> {
+        let mut changed_list = Vec::new();
+        let record = self.recorder.get_record();
 
-        let socket_v4 = match UdpSocket::bind(bind_addr.0).await {
-            Ok(s) => s,
-            Err(_) => return None,
-        };
-        match socket_v4.connect(connect_addr.0).await {
-            Ok(()) => (),
-            Err(_) => return None,
-        };
+        for (name, ips) in ip.iter() {
+            if !record.last_ip.contains_key(name) {
+                changed_list.push(name.clone());
+                continue;
+            }
 
-        let socket_v6 = match UdpSocket::bind(bind_addr.1).await {
-            Ok(s) => s,
-            Err(_) => return None,
-        };
-        match socket_v6.connect(connect_addr.1).await {
-            Ok(()) => (),
-            Err(_) => return None,
-        };
+            let last_ip = record.last_ip.get(name).unwrap();
+            if last_ip != ips {
+                changed_list.push(name.clone());
+            }
+        }
 
-        Some((
-            match socket_v4.local_addr() {
-                Ok(addr) => addr.ip().to_string(),
-                Err(_) => return None,
-            },
-            match socket_v6.local_addr() {
-                Ok(addr) => addr.ip().to_string(),
-                Err(_) => return None,
-            },
-        ))
+        changed_list
     }
 }

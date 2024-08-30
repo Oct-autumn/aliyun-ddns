@@ -6,4 +6,5 @@ Note: Now it only supports monitoring one type of ip addr (ipv4 or ipv6) at a ti
 ## Future Plan
 - [x] Support monitoring both ipv4 and ipv6 at the same time.
 - [x] Support paring multi-DNS records with specified ip.
-- [ ] Support monitoring ip by network interface.
+- [x] Support monitoring ip by NIC.
+- [ ] Support for multi-platform (Arm, Windows, etc.).

@@ -1,6 +1,6 @@
 [package]
 name = "aliyun-ddns"
-version = "0.1.0"
+version = "0.3.0"
 edition = "2021"
 
 [dependencies]
@@ -29,3 +29,4 @@ reqwest = { version = "0.12", features = ["json"] }
 rand = "0.8.5"
 regex = "1.10.6"
 ring = "0.17.8"
+pnet = "0.35.0"

@@ -1,15 +1,32 @@
 pub mod load_config;
 pub mod record;
 
+use std::collections::HashMap;
+
+use pnet::ipnetwork::IpNetwork;
 use serde::{Deserialize, Serialize};
 
 pub static LOG_PREFIX: &str = "aliyun-ddns";
 static DEFAULT_LOG_LEVEL: &str = "info";
 
+/// IP地址信息
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct IP {
+    pub v4: Option<IpNetwork>,
+    pub v6: Option<IpNetwork>,
+    pub v6_temp: Option<IpNetwork>,
+}
+
+impl PartialEq for IP {
+    fn eq(&self, other: &Self) -> bool {
+        self.v4 == other.v4 && self.v6 == other.v6 && self.v6_temp == other.v6_temp
+    }
+}
+
 /// 记录上次的运行信息（单独存储于特定文件中）
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Record {
-    pub last_ip: (String, String),
+    pub last_ip: HashMap<String, IP>,
     pub last_check: i64,
     pub last_update: i64,
 }
@@ -17,7 +34,7 @@ pub struct Record {
 impl Record {
     fn new() -> Record {
         Record {
-            last_ip: (String::new(), String::new()),
+            last_ip: HashMap::new(),
             last_check: 0,
             last_update: 0,
         }
@@ -30,7 +47,7 @@ pub struct Config {
     #[serde(default = "empty_string", rename = "domain-name")]
     pub domain_name: String,
     #[serde(rename = "record")]
-    pub dns_records: Vec<DNSRecord>,
+    pub records: Vec<MonitorRecord>,
     pub auth: Auth,
     pub log: Log,
     pub check: Check,
@@ -38,11 +55,15 @@ pub struct Config {
 
 /// 关联的解析记录
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct DNSRecord {
+pub struct MonitorRecord {
     #[serde(default = "empty_string", rename = "record-type")]
     pub record_type: String,
     #[serde(default = "empty_string")]
     pub hostname: String,
+    #[serde(default = "empty", rename = "nic-name")]
+    pub nic_name: Option<String>,
+    #[serde(default = "default_temporary_addr", rename = "use-temporary-addr")]
+    pub use_temporary_addr: bool,
 }
 
 /// Authentication Info
@@ -90,7 +111,7 @@ impl Config {
     fn new() -> Config {
         Config {
             domain_name: empty_string(),
-            dns_records: Vec::new(),
+            records: Vec::new(),
             auth: Auth::new(),
             log: Log::new(),
             check: Check::new(),
@@ -98,14 +119,14 @@ impl Config {
     }
 }
 
-impl DNSRecord {
-    fn new() -> DNSRecord {
-        DNSRecord {
-            record_type: empty_string(),
-            hostname: empty_string(),
-        }
-    }
-}
+//impl DNSRecord {
+//    fn new() -> DNSRecord {
+//        DNSRecord {
+//            record_type: empty_string(),
+//            hostname: empty_string(),
+//        }
+//    }
+//}
 
 impl Auth {
     fn new() -> Auth {
@@ -139,6 +160,12 @@ impl Check {
 
 fn empty_string() -> String {
     String::new()
+}
+fn empty() -> Option<String> {
+    None
+}
+fn default_temporary_addr() -> bool {
+    true
 }
 fn default_file_log() -> bool {
     false
