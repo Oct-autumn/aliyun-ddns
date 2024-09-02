@@ -2,6 +2,7 @@ use std::net::IpAddr;
 
 use pnet::ipnetwork::IpNetwork;
 use tokio::net::UdpSocket;
+use tracing::debug;
 
 use crate::config::IP;
 
@@ -39,8 +40,7 @@ pub async fn get_ip_via_socket() -> Option<IP> {
     } else {
         Some(IP {
             v4: v4_addr,
-            v6: None,
-            v6_temp: v6_addr,
+            v6: v6_addr,
         })
     }
 }
@@ -51,23 +51,18 @@ pub fn get_ip_via_nic() -> Vec<(String, IP)> {
     // the define of v6-temp: https://tools.ietf.org/html/rfc4941
     let interfaces = pnet::datalink::interfaces();
     let mut ip_list = Vec::new();
+
+    debug!("Interfaces: {:?}", interfaces);
+
     for interface in interfaces {
-        let mut ip = IP {
-            v4: None,
-            v6: None,
-            v6_temp: None,
-        };
+        let mut ip = IP { v4: None, v6: None };
         for ip_addr in interface.ips {
             match ip_addr.ip() {
                 IpAddr::V4(_) => {
                     ip.v4 = Some(ip_addr);
                 }
                 IpAddr::V6(_) => {
-                    if ip_addr.prefix() == 128 {
-                        ip.v6_temp = Some(ip_addr);
-                    } else {
-                        ip.v6 = Some(ip_addr);
-                    }
+                    ip.v6 = Some(ip_addr);
                 }
             }
         }

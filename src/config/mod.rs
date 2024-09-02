@@ -14,12 +14,11 @@ static DEFAULT_LOG_LEVEL: &str = "info";
 pub struct IP {
     pub v4: Option<IpNetwork>,
     pub v6: Option<IpNetwork>,
-    pub v6_temp: Option<IpNetwork>,
 }
 
 impl PartialEq for IP {
     fn eq(&self, other: &Self) -> bool {
-        self.v4 == other.v4 && self.v6 == other.v6 && self.v6_temp == other.v6_temp
+        self.v4 == other.v4 && self.v6 == other.v6
     }
 }
 
@@ -62,8 +61,6 @@ pub struct MonitorRecord {
     pub hostname: String,
     #[serde(default = "empty", rename = "nic-name")]
     pub nic_name: Option<String>,
-    #[serde(default = "default_temporary_addr", rename = "use-temporary-addr")]
-    pub use_temporary_addr: bool,
 }
 
 /// Authentication Info
@@ -163,9 +160,6 @@ fn empty_string() -> String {
 }
 fn empty() -> Option<String> {
     None
-}
-fn default_temporary_addr() -> bool {
-    true
 }
 fn default_file_log() -> bool {
     false

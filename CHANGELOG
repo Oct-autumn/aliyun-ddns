@@ -1,3 +1,7 @@
+v0.3.1
+    - Fix: fix DNS record update failure due to wrong order of parameters
+    - Rollback: disable the feature which uses temporary IPv6 address
+
 v0.3.0
     - Feature: support for getting IP address from NIC
     - Feature: support for specifying the method of getting IP address

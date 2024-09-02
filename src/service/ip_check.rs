@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use tracing::{info, trace, warn};
+use tracing::{debug, info, trace, warn};
 
 use crate::{
     config::{record::Recorder, IP},
@@ -38,18 +38,14 @@ impl IpCheckService {
         // Initialization
         let mut need_recheck = self.enable_recheck;
         let mut record = self.recorder.get_record();
-        let mut dns_records: HashMap<String, Vec<(String, String, bool)>> = HashMap::new();
+        let mut dns_records: HashMap<String, Vec<(String, String)>> = HashMap::new();
 
         // Collect DNS records
         for dns_record in GLOBAL_CONFIG.1.records.iter() {
             dns_records
                 .entry(dns_record.nic_name.clone().unwrap_or("".to_string()))
                 .or_insert(Vec::new())
-                .push((
-                    dns_record.record_type.clone(),
-                    dns_record.hostname.clone(),
-                    dns_record.use_temporary_addr,
-                ));
+                .push((dns_record.record_type.clone(), dns_record.hostname.clone()));
         }
 
         loop {
@@ -91,6 +87,9 @@ impl IpCheckService {
                     // update IP
                     info!("IP changed, updating DNS records");
 
+                    let mut success_count = 0;
+                    let mut failed_count = 0;
+
                     record.last_ip = ip_map.clone();
                     record.last_update = record.last_check;
                     self.recorder.update_record(record.clone());
@@ -98,35 +97,58 @@ impl IpCheckService {
                     // update DNS records
                     for nic_name in changed_list {
                         let ips = ip_map.get(&nic_name).unwrap();
+                        let dns_records = dns_records.get(&nic_name);
+                        if dns_records.is_none() {
+                            continue;
+                        }
 
-                        for dns_record in dns_records.get(&nic_name).unwrap() {
-                            let (record_type, hostname, use_temporary_addr) = dns_record;
+                        for dns_record in dns_records.unwrap() {
+                            let (record_type, hostname) = dns_record;
                             let ip = if record_type == "A" {
                                 ips.v4.clone()
-                            } else if *use_temporary_addr {
-                                ips.v6_temp.clone()
                             } else {
                                 ips.v6.clone()
                             };
 
                             if ip.is_none() {
-                                warn!("No IP address found for {}", hostname);
+                                warn!("No IP address found for record \"{}\"", hostname);
                                 continue;
                             }
 
                             let ip = ip.unwrap().ip().to_string();
+                            debug!(
+                                "Updating DNS record for {}.{} to {}",
+                                hostname, GLOBAL_CONFIG.1.domain_name, ip
+                            );
                             let result = self
                                 .dns_operate
-                                .update_dns_record(hostname, record_type, &ip)
+                                .update_dns_record(&ip, record_type, hostname)
                                 .await;
 
                             if result.is_err() {
-                                warn!("Failed to update DNS record for {}", hostname);
+                                failed_count += 1;
+                                warn!(
+                                    "Failed to update DNS record for {}.{}",
+                                    hostname, GLOBAL_CONFIG.1.domain_name
+                                );
+                            } else {
+                                success_count += 1;
+                                info!(
+                                    "DNS record for {}.{} updated to {}",
+                                    hostname, GLOBAL_CONFIG.1.domain_name, ip
+                                );
                             }
                         }
                     }
 
-                    info!("All DNS records updated successfully");
+                    if failed_count > 0 {
+                        warn!(
+                            "Update complete, Success:{}, Fail:{}",
+                            failed_count, success_count
+                        );
+                    } else {
+                        info!("All DNS records updated successfully");
+                    }
                     need_recheck = self.enable_recheck;
                 } else {
                     trace!("IP changed, recheck in {} seconds", self.recheck_interval);
